@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Órdenes en Tiempo Real</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .container-custom {
+            margin-top: 20px;
+        }
+        .order-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            cursor: pointer; /* Indica que es interactivo */
+        }
+        .order-details {
+            display: none; /* Oculto por defecto */
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+        .order-details ul {
+            padding-left: 0;
+            list-style: none;
+        }
+        .order-details li {
+            margin-bottom: 5px;
+        }
+        .buttons-container {
+            margin-top: 10px;
+        }
+        .navbar-custom {
+            background-color: #ffcc00; /* Amarillo suave */padding: 10px;
+        }
+        .navbar-customimg {
+            height: 10px; /* Tamaño del logotipo */
+        }
+        .logo {
+        max-width: 100px; /* Cambia el tamaño aquí según lo necesites */margin-right: 50px;
+        }
+        .background {
+            color:black
+        }
+    </style>
+</head>
+<body class="background"><nav class="navbar navbar-expand-lg navbar-custom"><img src="Logo.jpg" alt="Logo" class=logo><h2>NANAMIS</h2></nav>
+    <div class="container container-custom">
+        <h2>ORDENES PENDIENTES</h2>
+        <div id="orders-container"></div>
+    </div>
+
+    <!-- Modal de confirmación -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="confirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalLabel">Confirmar Orden</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">×</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    ¿Estás seguro de que deseas confirmar esta orden?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="confirmOrderBtn">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        let openOrders = {};
+        let currentOrder = null;
+        let currentOrderDiv = null;
+
+        function fetchOrders() {
+            fetch('MostrarInfo.php')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('orders-container');
+                    container.innerHTML = ''; // Borra el contenido que tenga
+
+                    data.forEach(order => {
+                        const orderDiv = document.createElement('div');
+                        orderDiv.classList.add('order-item');
+                        
+                        const total = (order.banderillas_count * 65) + (order.limonadas_count * 40);
+
+                        orderDiv.innerHTML = `
+                            <h4>Orden ID: ${order.orderId}</h4>
+                            <p>Fecha: ${order.fechaOrden}</p>
+                            <p>Banderillas: ${order.banderillas_count}</p>
+                            <p>Limonadas: ${order.limonadas_count}</p>
+                            <p>Total: $${total}</p>
+                            <div class="order-details">
+                                <h5>Banderillas</h5>
+                                <ul>
+                                    ${order.banderillas_details ? 
+                                        order.banderillas_details.split('; ').map((detalle, index) => `
+                                            <li>Banderilla #${index + 1}: ${detalle}</li>
+                                        `).join('') :
+                                        '<li>No hay banderillas disponibles</li>'
+                                    }
+                                </ul>
+                                <h5>Limonadas</h5>
+                                <ul>
+                                    ${order.limonadas_details ? 
+                                        order.limonadas_details.split('; ').map((detalle, index) => `
+                                            <li>Limonada #${index + 1}: ${detalle}</li>
+                                        `).join('') :
+                                        '<li>No hay limonadas disponibles</li>'
+                                    }
+                                </ul>
+                                <div class="buttons-container">
+                                    <button class="btn btn-warning confirm-btn">Confirmar</button>
+                                    <button class="btn btn-secondary cancel-btn">Cancelar</button>
+                                </div>
+                            </div>
+                        `;
+
+                        container.appendChild(orderDiv);
+
+                        if (openOrders[order.orderId]) {
+                            const details = orderDiv.querySelector('.order-details');
+                            details.style.display = 'block';
+                        }
+
+                        // Añadir funcionalidad para desplegar los detalles
+                        orderDiv.addEventListener('click', function() {
+                            const details = this.querySelector('.order-details');
+                            const isOpen = details.style.display === 'block';
+                            details.style.display = isOpen ? 'none' : 'block';
+
+                            // Actualizar el estado de la orden en openOrders
+                            openOrders[order.orderId] = !isOpen;
+                        });
+
+                        // Funcionalidad para los botones de Confirmar y Cancelar
+                        const confirmBtn = orderDiv.querySelector('.confirm-btn');
+                        const cancelBtn = orderDiv.querySelector('.cancel-btn');
+
+                        confirmBtn.addEventListener('click', function(e) {
+                            e.stopPropagation(); // Evitar que se dispare el evento del contenedor
+                            currentOrder = order;
+                            currentOrderDiv = orderDiv;
+                            $('#confirmModal').modal('show');
+                        });
+
+                        cancelBtn.addEventListener('click', function(e) {
+                            e.stopPropagation(); // Evitar que se dispare el evento del contenedor
+                            alert(`Pedido #${order.orderId} cancelado.`);
+                            // Aquí puedes agregar la lógica para cancelar el pedido
+                        });
+                    });
+                })
+                .catch(error => console.error('Error fetching orders:', error));
+        }
+
+        document.getElementById('confirmOrderBtn').addEventListener('click', function() {
+            if (currentOrder) {
+                const orderData = {
+                    id_orden: currentOrder.orderId,
+                    cantidad_banderillas: currentOrder.banderillas_count,
+                    cantidad_limonadas: currentOrder.limonadas_count,
+                    total: (currentOrder.banderillas_count * 65) + (currentOrder.limonadas_count * 40), // Cálculo del total
+                    id_user: 1 
+                };
+
+                fetch('guardar_venta.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        $('#confirmModal').modal('hide');
+                        currentOrderDiv.remove(); // Eliminar la orden del HTML
+                    } else {
+                        alert('Error al guardar la orden en la base de datos.');
+                    }
+                })
+                .catch(error => console.error('Error al guardar la orden:', error));
+            }
+        });
+
+        // Fetch orders every 5 seconds
+        setInterval(fetchOrders, 5000);
+
+        // Initial fetch
+        fetchOrders();
+    </script>
+</body>
+</html>
